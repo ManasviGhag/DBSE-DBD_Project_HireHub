@@ -1,0 +1,7 @@
+job-portal-backend/node_modules/
+job-portal-backend/.env
+job-portal-backend/uploads/*
+!job-portal-backend/uploads/.gitkeep
+job-portal-frontend/node_modules/
+.DS_Store
+*.log
