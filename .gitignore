@@ -5,3 +5,4 @@ job-portal-backend/uploads/*
 job-portal-frontend/node_modules/
 .DS_Store
 *.log
+~$*
