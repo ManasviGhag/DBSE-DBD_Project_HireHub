@@ -21,7 +21,9 @@ function fileFilter(req, file, cb) {
   if (allowed.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error("Only .pdf and .docx resumes are accepted"));
+    const err = new Error("Only .pdf and .docx resumes are accepted");
+    err.status = 400; // client error, not a server failure
+    cb(err);
   }
 }
 

@@ -108,6 +108,7 @@ a {
 }
 
 .nav-links a.active,
+.nav-links button.active,
 .nav-links a:hover,
 .nav-links button:hover {
   color: var(--purple);
@@ -3492,4 +3493,206 @@ a.cp-mini-row:hover .cp-mini-main strong{color:var(--purple)}
   .offer-letter{padding:18px}
   .offer-letter-terms{grid-template-columns:1fr;gap:2px}
   .offer-letter-terms dd{margin-bottom:6px}
+}
+
+/* =========================================================
+   ROLE-AWARE HOME — overview content rendered on "/"
+========================================================= */
+
+.home-candidate,
+.home-recruiter {
+  max-width: 1350px;
+  margin: auto;
+  padding: 40px 5% 90px;
+}
+
+/* =========================================================
+   LOGIN V2 — split screen: form left, photo right (Login page only)
+========================================================= */
+
+.login-v2 {
+  display: block;
+  min-height: calc(100vh - 76px);
+  padding: 0;
+  background:
+    radial-gradient(ellipse at 22% 18%, rgba(154, 115, 255, .16), transparent 55%),
+    radial-gradient(ellipse at 82% 85%, rgba(243, 109, 187, .10), transparent 50%),
+    linear-gradient(160deg, #f4f1fc 0%, #e9e5f6 50%, #f3f0fb 100%);
+}
+
+.login-v2-shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  min-height: calc(100vh - 76px);
+}
+
+.login-v2-form-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 20px 24px;
+}
+
+/* Form panel (centred in the left half, light frosted glass) */
+
+.login-v2 .auth-card {
+  position: relative;
+  width: min(400px, 100%);
+  padding: 24px 30px;
+  color: var(--ink);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .86), rgba(243, 238, 255, .74));
+  border: 1px solid rgba(225, 216, 255, .9);
+  border-radius: 28px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 30px 60px rgba(18, 20, 49, .32);
+}
+
+.login-v2 .auth-brand {
+  text-align: left;
+}
+
+.login-v2 .auth-brand h2 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.login-v2 .auth-brand h2 strong {
+  font-weight: 800;
+}
+
+.login-v2 .auth-brand p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.login-v2 .role-title {
+  margin-top: 16px;
+  color: var(--ink);
+}
+
+.login-v2 .role-switch button {
+  padding: 10px 6px;
+  color: var(--ink);
+  background: #fff;
+  border-color: #ddd3fb;
+}
+
+.login-v2 .role-switch button:hover {
+  background: #f7f4ff;
+}
+
+.login-v2 .role-switch button.active {
+  color: #fff;
+  background: var(--purple);
+  border-color: var(--purple);
+  font-weight: 700;
+}
+
+.login-v2 .auth-card label {
+  margin: 10px 0;
+  color: var(--ink);
+}
+
+.login-v2 .auth-card input {
+  margin-top: 6px;
+  padding: 10px 13px;
+  color: var(--ink);
+  background: #fff;
+  border-color: #ddd3fb;
+}
+
+.login-v2 .auth-card input::placeholder {
+  color: #8a8fa6;
+}
+
+.login-v2 .auth-card input:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(112, 68, 244, .2);
+}
+
+.login-v2 .auth-card input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: inset 0 0 0 100px #fff;
+}
+
+.login-v2 .btn.full {
+  margin-top: 4px;
+  background: var(--purple);
+  box-shadow: 0 10px 24px rgba(112, 68, 244, .3);
+}
+
+.login-v2 .btn.full:hover {
+  background: #7d55f6;
+}
+
+.login-v2 .btn.full:focus-visible {
+  outline: 3px solid var(--purple2);
+  outline-offset: 2px;
+}
+
+.login-v2 .btn.full:disabled {
+  opacity: .75;
+  cursor: wait;
+  transform: none;
+}
+
+.login-v2 .auth-demo-note {
+  margin: 12px 0 0;
+  color: #5d6280;
+  background: #ebe4ff;
+}
+
+.login-v2 .auth-foot {
+  margin: 10px 0 0;
+  color: var(--ink);
+}
+
+.login-v2 .auth-foot a {
+  color: var(--purple);
+}
+
+/* Photo (right half), edge to edge */
+
+.login-v2-photo {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-v2-photo img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 66% 20%;
+}
+
+@media (max-width: 900px) {
+  .login-v2-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-v2-form-side {
+    padding: 24px 16px;
+  }
+
+  .login-v2 .auth-card {
+    width: min(460px, 100%);
+  }
+
+  .login-v2-photo {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .login-v2 .auth-card {
+    padding: 22px 18px;
+  }
 }

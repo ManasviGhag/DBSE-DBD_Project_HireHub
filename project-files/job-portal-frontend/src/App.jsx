@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { jsPDF } from "jspdf";
+import loginPhoto from "./assets/login-photo.png";
 import {
   Routes,
   Route,
@@ -400,9 +402,18 @@ function clearAuth() {
 
 function getDashboardPath(role) {
   const normalized = (role || "").toLowerCase();
-  if (normalized === "recruiter") return "/recruiter";
+  // Overview now lives on Home, so dashboards open on their first tab.
+  if (normalized === "recruiter") return "/recruiter/jobs";
   if (normalized === "admin") return "/admin";
-  return "/candidate";
+  return "/jobs";
+}
+
+// Where to land right after login: Home for candidates/recruiters
+// (their overview), the dashboard for everyone else.
+function getPostLoginPath(role) {
+  const normalized = (role || "").toLowerCase();
+  if (normalized === "candidate" || normalized === "recruiter") return "/";
+  return getDashboardPath(role);
 }
 
 // Reads the user id out of the JWT payload already stored via saveAuth.
@@ -711,10 +722,18 @@ function Navbar() {
   };
 
   const isAuthenticated = auth?.isAuthenticated;
-  const isCandidate = auth?.role === "Candidate";
-  // Stored role comes from the backend in lowercase ("recruiter")
+  // Stored role comes from the backend in lowercase ("candidate", "recruiter")
+  const isCandidate =
+    (auth?.role || "").toLowerCase() === "candidate";
   const isRecruiter =
     (auth?.role || "").toLowerCase() === "recruiter";
+
+  // Highlights the role's portal link on its dashboard pages. /jobs is
+  // left to the "Jobs" link so two links are never active together.
+  const isRecruiterPortalPage =
+    location.pathname.startsWith("/recruiter/");
+  const isCandidatePortalPage =
+    ["/applications", "/interviews", "/profile"].includes(location.pathname);
 
   return (
     <header className="navbar">
@@ -784,8 +803,9 @@ function Navbar() {
             Show ONLY For Candidates */}
         {isAuthenticated && isCandidate && (
           <button
+            className={isCandidatePortalPage ? "active" : undefined}
             onClick={() =>
-              protectedNavigate("/candidate")
+              protectedNavigate(getDashboardPath(auth.role))
             }
           >
             For Candidates
@@ -796,8 +816,9 @@ function Navbar() {
             Show ONLY For Recruiters */}
         {isAuthenticated && isRecruiter && (
           <button
+            className={isRecruiterPortalPage ? "active" : undefined}
             onClick={() =>
-              protectedNavigate("/recruiter")
+              protectedNavigate(getDashboardPath(auth.role))
             }
           >
             For Recruiters
@@ -871,6 +892,18 @@ function Navbar() {
 ========================================================= */
 
 function Home() {
+  // Re-render on every navigation (e.g. logout → "/") so the role check stays fresh.
+  useLocation();
+  const role =(getAuth()?.isAuthenticated ? getAuth().role : "") || "";
+  const normalizedRole = role.toLowerCase();
+
+  if (normalizedRole === "candidate") return <CandidateHome />;
+  if (normalizedRole === "recruiter") return <RecruiterHome />;
+
+  return <LandingHome />;
+}
+
+function LandingHome() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
@@ -2039,7 +2072,7 @@ function Auth({ register = false }) {
           });
 
       saveAuth(data);
-      navigate(getDashboardPath(data.user.role));
+      navigate(getPostLoginPath(data.user.role));
     } catch (err) {
       alert(
         err.message ||
@@ -2050,8 +2083,12 @@ function Auth({ register = false }) {
     }
   };
 
+  // Login wraps the form card in the two-panel layout; Register renders it as before.
+  const Shell = register ? React.Fragment : LoginShell;
+
   return (
-    <main className="auth-page">
+    <main className={register ? "auth-page" : "auth-page login-v2"}>
+      <Shell>
       <motion.div
         initial={{
           opacity: 0,
@@ -2064,20 +2101,26 @@ function Auth({ register = false }) {
         className="auth-card"
       >
         <div className="auth-brand">
-          <span className="brand-icon">
-            <BriefcaseBusiness />
-          </span>
+          {register && (
+            <span className="brand-icon">
+              <BriefcaseBusiness />
+            </span>
+          )}
 
           <h2>
-            {register
-              ? "Create your HireHub account"
-              : "Welcome back"}
+            {register ? (
+              "Create your HireHub account"
+            ) : (
+              <>
+                Welcome <strong>back</strong>
+              </>
+            )}
           </h2>
 
           <p>
             {register
               ? "Choose your role and start building your future."
-              : "Sign in to continue your journey."}
+              : "Sign in to your account below."}
           </p>
         </div>
 
@@ -2220,7 +2263,21 @@ function Auth({ register = false }) {
           </Link>
         </p>
       </motion.div>
+      </Shell>
     </main>
+  );
+}
+
+// Login page: split screen — form panel (children) on the left, photo on the right.
+function LoginShell({ children }) {
+  return (
+    <div className="login-v2-shell">
+      <div className="login-v2-form-side">{children}</div>
+
+      <div className="login-v2-photo">
+        <img src={loginPhoto} alt="Person working on a laptop" />
+      </div>
+    </div>
   );
 }
 
@@ -2351,7 +2408,8 @@ function ResumeInsightsEditor({ resume, onCancel, onSave }) {
   );
 }
 
-function Candidate() {
+// Candidate overview, shown on Home ("/") for logged-in candidates.
+function CandidateHome() {
   const auth = getAuth();
   const token = auth?.token;
 
@@ -2376,6 +2434,7 @@ function Candidate() {
   const [loadError, setLoadError] = useState("");
   const [offers, setOffers] = useState([]);
   const [viewingOffer, setViewingOffer] = useState(null);
+  const [savedJobsCount, setSavedJobsCount] = useState(null);
 
   const hasResume = Boolean(profileData?.latestResume);
 
@@ -2387,6 +2446,20 @@ function Candidate() {
     getCandidateOffers(token)
       .then((result) => {
         if (!cancelled) setOffers(result.offers || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Saved-jobs count for the stats tile; same fail-safe loading as offers.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getSavedJobs(token)
+      .then((result) => {
+        if (!cancelled) setSavedJobsCount((result.savedJobs || []).length);
       })
       .catch(() => {});
     return () => {
@@ -2549,10 +2622,10 @@ function Candidate() {
       interviewsCount ? "Scheduled" : "None yet",
     ],
     [
-      "0",
+      savedJobsCount === null ? "—" : String(savedJobsCount),
       "Saved Jobs",
       BriefcaseBusiness,
-      "Coming soon",
+      savedJobsCount ? "Bookmarked for later" : "None yet",
     ],
     [
       bestMatchScore !== null ? `${bestMatchScore}%` : "—",
@@ -2598,7 +2671,7 @@ function Candidate() {
   ];
 
   return (
-    <DashboardLayout role="Candidate">
+    <main className="home-candidate">
       <div className="candidate-space">
         <motion.div
           className="candidate-welcome"
@@ -2631,7 +2704,7 @@ function Candidate() {
             {resumeButtonLabel}
             <input
               type="file"
-              accept=".pdf,.doc,.docx"
+              accept=".pdf,.docx"
               onChange={handleResumeChange}
               disabled={uploading}
             />
@@ -2747,7 +2820,7 @@ function Candidate() {
                       {uploading ? "Uploading..." : "Replace Resume"}
                       <input
                         type="file"
-                        accept=".pdf,.doc,.docx"
+                        accept=".pdf,.docx"
                         onChange={handleResumeChange}
                         disabled={uploading}
                       />
@@ -2827,7 +2900,7 @@ function Candidate() {
                   {uploading ? "Uploading..." : "Upload"}
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf,.docx"
                     onChange={handleResumeChange}
                     disabled={uploading}
                   />
@@ -3206,7 +3279,7 @@ function Candidate() {
           <ArrowRight size={18} />
         </motion.div>
       </div>
-    </DashboardLayout>
+    </main>
   );
 }
 
@@ -3635,7 +3708,7 @@ function CandidateJobs() {
 
   const recommendedEmpty = !hasResume ? (
     <p className="candidate-empty-state">
-      <Link to="/candidate">Upload your resume</Link> to get AI-matched job
+      <Link to="/">Upload your resume</Link> to get AI-matched job
       recommendations.
     </p>
   ) : (
@@ -4393,49 +4466,84 @@ function offerLetterAcceptance(letter) {
     : "Please confirm your acceptance of this offer at your earliest convenience.";
 }
 
-// Same content as <OfferLetterView>, as plain text for the .txt download.
-function offerLetterText(letter) {
-  const lines = [
-    letter.company.toUpperCase(),
-    "",
-    "OFFER LETTER",
-    "",
-    `Date: ${formatDate(letter.issuedOn)}`,
-    "",
-    `Dear ${letter.candidateName},`,
-    "",
-    offerLetterIntro(letter),
-    "",
-    ...offerLetterDetails(letter).map(([label, value]) => `${label}: ${value}`),
-  ];
-  if (letter.additionalTerms) {
-    lines.push("", "Additional Terms:", letter.additionalTerms);
+// Same content as <OfferLetterView>, laid out as an A4 PDF for the download.
+function offerLetterPdf(letter) {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const margin = 20;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const width = pageWidth - margin * 2;
+  let y = margin;
+
+  const setFont = (size, style = "normal") => {
+    doc.setFont("helvetica", style);
+    doc.setFontSize(size);
+    return size * 0.3528 * 1.5; // line height in mm (pt → mm, 1.5 spacing)
+  };
+  const ensureSpace = (height) => {
+    if (y + height > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
+  // Wrapped paragraph; flows onto a new page when it reaches the bottom margin.
+  const write = (text, { size = 11, style = "normal", align = "left", gap = 4 } = {}) => {
+    const lineHeight = setFont(size, style);
+    const x = align === "center" ? pageWidth / 2 : align === "right" ? pageWidth - margin : margin;
+    for (const line of doc.splitTextToSize(String(text), width)) {
+      ensureSpace(lineHeight);
+      doc.text(line, x, y, { align, baseline: "top" });
+      y += lineHeight;
+    }
+    y += gap;
+  };
+
+  write(letter.company.toUpperCase(), { size: 18, style: "bold", align: "center", gap: 2 });
+  write("OFFER LETTER", { size: 13, style: "bold", align: "center", gap: 3 });
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 5;
+  write(`Date: ${formatDate(letter.issuedOn)}`, { size: 10, align: "right", gap: 6 });
+
+  write(`Dear ${letter.candidateName},`);
+  write(offerLetterIntro(letter));
+
+  for (const [label, value] of offerLetterDetails(letter)) {
+    const lineHeight = setFont(11, "bold");
+    const labelText = `${label}:`;
+    const labelWidth = doc.getTextWidth(labelText) + 2;
+    setFont(11);
+    doc.splitTextToSize(String(value), width - labelWidth).forEach((line, i) => {
+      ensureSpace(lineHeight);
+      if (i === 0) {
+        setFont(11, "bold");
+        doc.text(labelText, margin, y, { baseline: "top" });
+        setFont(11);
+      }
+      doc.text(line, margin + labelWidth, y, { baseline: "top" });
+      y += lineHeight;
+    });
   }
-  lines.push(
-    "",
-    offerLetterAcceptance(letter),
-    "",
-    "We look forward to welcoming you to the team.",
-    "",
-    "Sincerely,",
-    letter.recruiterName,
-    letter.company,
-    ""
-  );
-  return lines.join("\n");
+  y += 4;
+
+  if (letter.additionalTerms) {
+    write("Additional Terms:", { style: "bold", gap: 1 });
+    write(letter.additionalTerms);
+  }
+
+  write(offerLetterAcceptance(letter));
+  write("We look forward to welcoming you to the team.", { gap: 10 });
+
+  write("Sincerely,", { gap: 1 });
+  write(letter.recruiterName, { style: "bold", gap: 0 });
+  write(letter.company, { gap: 0 });
+
+  return doc;
 }
 
 function downloadOfferLetter(letter) {
-  const blob = new Blob([offerLetterText(letter)], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
   const slug = `${letter.company}-${letter.position}`.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-  link.href = url;
-  link.download = `Offer-Letter-${slug || "HireHub"}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  offerLetterPdf(letter).save(`Offer-Letter-${slug || "HireHub"}.pdf`);
 }
 
 function OfferLetterView({ letter }) {
@@ -5350,7 +5458,7 @@ function CandidateProfile() {
                           {uploading ? "Uploading..." : "Replace Resume"}
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx"
+                            accept=".pdf,.docx"
                             onChange={handleResumeChange}
                             disabled={uploading}
                           />
@@ -5377,7 +5485,7 @@ function CandidateProfile() {
                         {uploading ? "Uploading..." : "Upload"}
                         <input
                           type="file"
-                          accept=".pdf,.doc,.docx"
+                          accept=".pdf,.docx"
                           onChange={handleResumeChange}
                           disabled={uploading}
                         />
@@ -5778,7 +5886,8 @@ function ResumeSummary({ resume, fallbackSkills = [] }) {
    RECRUITER — OVERVIEW
 ========================================================= */
 
-function Recruiter() {
+// Recruiter overview, shown on Home ("/") for logged-in recruiters.
+function RecruiterHome() {
   const auth = getAuth();
   const token = auth?.token;
   const recruiterName = auth?.name || "Recruiter";
@@ -5830,7 +5939,7 @@ function Recruiter() {
   const upcomingInterviews = interviews.filter(isUpcomingInterview).slice(0, 3);
 
   return (
-    <DashboardLayout role="Recruiter">
+    <main className="home-recruiter">
       <div className="recruiter-command cp-page">
         <div className="recruiter-command-head">
           <div>
@@ -6003,7 +6112,7 @@ function Recruiter() {
           }}
         />
       )}
-    </DashboardLayout>
+    </main>
   );
 }
 
@@ -7992,13 +8101,6 @@ function DashboardLayout({
 }) {
   const navigate = useNavigate();
 
-  const overviewPath =
-    role === "Candidate"
-      ? "/candidate"
-      : role === "Recruiter"
-      ? "/recruiter"
-      : "/admin";
-
   const logout = () => {
     clearAuth();
     navigate("/");
@@ -8036,11 +8138,6 @@ function DashboardLayout({
         </div>
 
         <nav>
-          <Link to={overviewPath}>
-            <BarChart3 size={18} />
-            Overview
-          </Link>
-
           {role === "Candidate" && (
             <Link to="/jobs">
               <BriefcaseBusiness size={18} />
@@ -8147,7 +8244,8 @@ function App() {
             <ProtectedRoute
               roles={["Candidate"]}
             >
-              <Candidate />
+              {/* Overview moved to Home */}
+              <Navigate to="/" replace />
             </ProtectedRoute>
           }
         />
@@ -8193,7 +8291,8 @@ function App() {
             <ProtectedRoute
               roles={["Recruiter"]}
             >
-              <Recruiter />
+              {/* Overview moved to Home */}
+              <Navigate to="/" replace />
             </ProtectedRoute>
           }
         />

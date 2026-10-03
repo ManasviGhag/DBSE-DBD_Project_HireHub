@@ -48,7 +48,9 @@ app.use("/api", (req, res) => {
 // Centralized error handler (e.g. multer file-type errors)
 app.use((err, req, res, next) => {
   console.error("[unhandled error]", err.message);
-  res.status(err.status || 500).json({ message: err.message || "Something went wrong" });
+  // Multer's own errors (e.g. LIMIT_FILE_SIZE for files over 5 MB) are bad requests too
+  const status = err.status || (err.name === "MulterError" ? 400 : 500);
+  res.status(status).json({ message: err.message || "Something went wrong" });
 });
 
 async function start() {

@@ -72,6 +72,13 @@ export async function deleteResume(req, res) {
 
     await latestResume.deleteOne();
 
+    // Remove the uploaded file as well, as uploadResume does for replaced resumes.
+    try {
+      await fs.unlink(latestResume.filePath);
+    } catch (unlinkErr) {
+      console.warn("[deleteResume] could not delete file", latestResume.filePath, unlinkErr.code);
+    }
+
     // Reset the profile fields that were populated from the resume,
     // so match scoring falls back to the "no resume" state.
     await User.findByIdAndUpdate(req.user.id, {
